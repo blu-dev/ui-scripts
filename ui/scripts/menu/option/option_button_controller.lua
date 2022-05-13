@@ -16,18 +16,38 @@ The output disassembly of this file is guaranteed to match exactly that of optio
 when unmodified.
 ]]--
 
+-- The common UI object/class
 local ui_common = UiScriptPlayer.require("common/ui_common")
+
+-- The current layout view (set by most functions)
 layout_view = nil
+
+-- The scene exit code
 exit_code = SCENE_EXIT_CODE_NONE
+
+-- If there was a button edited
 button_is_edited = nil
+
+-- The updated button
 updated_button_id = nil
 
+-- The button selector for picking each individual button of the controller
 local button_selector = nil
+-- The config object for creating the selector
 local button_selector_config = nil
+
+-- The guide layout (for things like the reset button)
 local guide_layout = nil
+
+-- The parts of the guide layout
 local parts_guide = nil
+
+-- Whether or not the user is able to enter the test menu
 local can_test_play = false
 
+-- Plays the selection animation for a full key set (dual joycon or pro controller)
+-- Args:
+--  * `button_id`: the id of the button to play the select animation for
 local play_select_full_key_animation = function (button_id)
     local selection = "ctr_normal_sel_"
     if IS_PRO == true then
@@ -64,6 +84,9 @@ local play_select_full_key_animation = function (button_id)
     end
 end
 
+-- Plays the selection animation for a single joycon
+-- Args:
+--  * `button_id`: the id of the button to play the select animation for
 local play_select_joy_key_animation = function (button_id)
     local selection = "ctr_joy_sel_"
 
@@ -92,6 +115,9 @@ local play_select_joy_key_animation = function (button_id)
     end
 end
 
+-- Plays the selection animation for a gamecube controller
+-- Args:
+--  * `button_id`: the id of the button to play the select animation for
 local play_select_gc_key_animation = function (button_id)
     local selection = "ctr_gc_sel_"
 
@@ -124,6 +150,10 @@ local play_select_gc_key_animation = function (button_id)
     end
 end
 
+-- Plays the selection animation for the specified controller type
+-- Args:
+--  * `controller_id`: the type of controller
+--  * `button_id`: the id of the button to play the select animation for
 local play_select_key_animation = function (controller_id, button_id)
     if controller_id == CONTROLLER_FULL_KEY then
         play_select_full_key_animation(button_id)
@@ -134,10 +164,17 @@ local play_select_key_animation = function (controller_id, button_id)
     end
 end
 
+-- Checks if a button is a trigger (LR or ZLR) for a single joycon
+-- Args:
+--  * `button_id`: the id of the button to check
 local is_button_joycon_trigger = function (button_id)
     return button_id == BUTTON_ID_JC_TRIGGER_LR or button_id == BUTTON_ID_JC_TRIGGER_ZLR
 end
 
+-- Checks if a button is the right stick on a non-single joycon controller
+-- Args:
+--  * `controller_id`: the type of controller
+--  * `button_id`: the id of the button to check
 local is_button_right_stick = function (controller_id, button_id)
     if controller_id == CONTROLLER_FULL_KEY then
         return button_id == BUTTON_ID_FK_STICK_R
@@ -148,6 +185,11 @@ local is_button_right_stick = function (controller_id, button_id)
     end
 end
 
+-- Sets the text of the specified button from an MSBT label
+-- Args:
+--  * `controller_id`: the type of controller
+--  * `button_id`: the id of the button to check
+--  * `layout`: the button layout (the individual part)
 local set_button_text = function (controller_id, button_id, layout)
     local text_pane = layout:get_pane("set_txt_name_00")
 
@@ -187,6 +229,11 @@ local set_button_text = function (controller_id, button_id, layout)
     end
 end
 
+-- Plays the on/off animation for the specified button
+-- Args:
+--  * `controller_id`: the type of controller
+--  * `button_id`: the id of the button to play the animation for
+--  * `on_off`: turn it on/off. this parameter can be `nil`, and if it is `nil` it means to get it from the underlying UI code
 local play_check_animation = function (controller_id, button_id, on_off)
     layout_view = layout_root:get_root_view()
 
@@ -211,6 +258,9 @@ local play_check_animation = function (controller_id, button_id, on_off)
     end
 end
 
+-- Displays the icon for the controller option dependending on the controller type
+-- Args:
+--  * `controller_id`: the type of controller
 local display_option_icons = function (controller_id)
     layout_view = layout_root:get_root_view()
 
@@ -244,6 +294,9 @@ local display_option_icons = function (controller_id)
     end
 end
 
+-- Restores the controller settings back to what it was when the user started the control picker
+-- Args:
+--  * `controller_id`: the type of controller
 local restore_settings = function (controller_id)
     UiScriptPlayer.invoke("restore_settings", controller_id)
     if controller_id == CONTROLLER_FULL_KEY then
@@ -285,6 +338,9 @@ local restore_settings = function (controller_id)
     display_option_icons(controller_id)
 end
 
+-- Sets up the state of the control selector
+-- Args:
+--  * `controller_id`: the type of controller
 local setup = function (controller_id) 
     layout_view = layout_root:get_root_view()
 
@@ -443,6 +499,9 @@ local setup = function (controller_id)
     display_option_icons(controller_id)
 end
 
+-- Whether or not the user is exiting the control picker
+-- Args:
+--  * `controller_id`: the type of controller
 local should_exit = function (controller_id)
     if UiScriptPlayer.invoke("is_setting_changed", controller_id) == true then
         AppPopupManager.open_database("ID_POPUP_OPT_BTN_KEY_RETURN_NO_SAVE")
@@ -459,7 +518,10 @@ local should_exit = function (controller_id)
     end
 end
 
-local wait_for_save = function (controller_id) 
+-- Tries to save the controller settings
+-- Args:
+--  * `controller_id`: the type of controller
+local try_save = function (controller_id) 
     local not_assigned = UiScriptPlayer.invoke("get_not_assigned_operation_num", controller_id)
     if 0 == not_assigned then
         UiSoundManager:play_se_label("se_system_save")
@@ -482,6 +544,9 @@ local wait_for_save = function (controller_id)
     end
 end
 
+-- Gets the MSBT label of the controller id
+-- Args:
+--  * `controller_id`: the type of controller
 local get_controller_label = function (controller_id)
     if controller_id == CONTROLLER_GC_CON then
         return MSG_LABEL_GC_CON
@@ -491,6 +556,9 @@ local get_controller_label = function (controller_id)
     return MSG_LABEL_FULL_KEY
 end
 
+-- Attempts to start a test play session
+-- Args:
+--  * `controller_id`: the type of controller
 local try_test_play = function (controller_id)
     if UiScriptPlayer.invoke("can_test_play") == false then
         AppPopupManager.open_database_args("ID_POPUP_OPT_BTN_KEY_CANNOT_TRY", get_controller_label(controller_id), "s")
@@ -505,6 +573,7 @@ local try_test_play = function (controller_id)
     end
 end
 
+-- Begins a test play session
 local test_play = function ()
     button_selector:set_enable(false)
     ComFrameActor.hide_frame(true)
@@ -522,30 +591,13 @@ local test_play = function ()
     until false
 end
 
+-- Sets the visibility of the guide
 local set_guide_visibility = function (enabled)
     parts_guide:set_visible(enabled)
     guide_layout:set_enable(enabled)
 end
 
---[[
-UPVALUES:
-- 0: _G
-- 1: setup
-- 2: button_selector
-- 3: guide_layout
-- 4: play_select_key_animation
-- 5: is_button_joycon_trigger
-- 6: ui_common
-- 7: set_guide_visibility
-- 8: get_controller_label
-- 9: restore_settings
-- 10: display_option_icons
-- 11: play_check_animation
-- 12: should_exit
-- 13: wait_for_save
-- 14: try_test_play
-- 15: test_play
-]]--
+-- The main function
 main = function ()
     layout_view = layout_root:get_root_view()
     exit_code = SCENE_EXIT_CODE_NONE
@@ -633,7 +685,7 @@ main = function ()
                 exit_code = SCENE_EXIT_CODE_CANCEL
             end
         elseif ComFrameActor.is_decided() == true then
-            if wait_for_save(CONTROLLER_TYPE) == true then
+            if try_save(CONTROLLER_TYPE) == true then
                 exit_code = SCENE_EXIT_CODE_NORMAL
             end
         else
@@ -703,8 +755,14 @@ main = function ()
     end
 end
 
+-- The last selected button
 local last_button = nil
 
+-- The function that helps with selecting buttons in the diamond shape (no diamond shape for GC controllers)
+-- Args:
+--  * `current_button`: the currently selected button
+--  * `stick_x`: the x position of the left stick
+--  * `stick_y`: the y position of the left stick (negative is up)
 select_button_func = function (current_button, stick_x, stick_y)
     local new_button = current_button
     if CONTROLLER_TYPE == CONTROLLER_FULL_KEY then
