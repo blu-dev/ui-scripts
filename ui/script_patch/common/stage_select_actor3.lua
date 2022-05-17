@@ -1,3 +1,22 @@
+--[[
+FILE: stage_select_actor3.lua
+Reference Code: stage_select_actor3.lc
+Author: blujay
+Notes: The following code has been decompiled with the assistance of a modified
+binary of the DSLuaDecompiler to produce *some* output, while not very meaningful it helps
+outline the structure of some functions so that the disassembled lua could be used
+as a reference instead of the guiding light
+The following code was all written by hand, and was compiled via https://github.com/ultimate-research/smash-lua
+and disassembled using https://github.com/jam1garner/smash-luadec
+The output disassembly of this file is guaranteed to match exactly that of stage_select_actor3.lc
+when unmodified.
+]]--
+
+--[[
+    this file was created from 6000 lines of disassembly that the DSLuaDecompiler couldn't decompile
+
+    i am very tired
+]]--
 
 -- R0
 local ui_common        = UiScriptPlayer.require("common/ui_common")
