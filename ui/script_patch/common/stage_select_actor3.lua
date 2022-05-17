@@ -31,32 +31,32 @@ local select_button_frames = 4
 local scroll_amount_max = 150.0
 
 -- medal states
-local local8 = 0        -- R8
-local local9 = 1        -- R9
-local local10 = 2       -- R10
-local local11 = 3       -- R11
-local local12 = 4       -- R12
+local MEDAL_STATE_UNINITIALIZED = 0        -- R8
+local MEDAL_STATE_ACTIVE        = 1        -- R9
+local MEDAL_STATE_WAITING       = 2        -- R10
+local MEDAL_STATE_PLACED        = 3        -- R11
+local MEDAL_STATE_TERM          = 4        -- R12
 
---
-local local13 = 0       -- R13
-local local14 = 1       -- R14
-local local15 = 2       -- R15
-local local16 = 3       -- R16
+-- Button IDs for the main buttons (unused)
+local BUTTON_ID_BACK    = 0       -- R13
+local BUTTON_ID_NORMAL  = 1       -- R14
+local BUTTON_ID_MAKE    = 2       -- R15
+local MAIN_BUTTON_COUNT = 3       -- R16
 
 -- Buttons IDs for the up/down buttons on the custom stage tab
-local button_id_sub_stage_up   = 0       -- R17
-local button_id_sub_stage_down = 1       -- R18
+local BUTTON_ID_SUB_STAGE_UP   = 0       -- R17
+local BUTTON_ID_SUB_STAGE_DOWN = 1       -- R18
+
+-- Button ids for the stage select previews
+local BUTTON_ID_FORM_TYPE   = 0       -- R19
+local BUTTON_ID_MUSC_SELECT = 1       -- R20
+local PREVIEW_BUTTON_COUNT  = 2       -- R21
 
 --
-local local19 = 0       -- R19
-local local20 = 1       -- R20
-local local21 = 2       -- R21
-
---
-local local22 = 0       -- R22
-local local23 = 1       -- R23
-local local24 = 2       -- R24
-local local25 = 3       -- R25
+local SCENE_STATE_REGULAR     = 0 -- R22
+local SCENE_STATE_SHOULD_EXIT = 1 -- R23
+local SCENE_STATE_EXITING     = 2 -- R24
+local SCENE_STATE_EXITED      = 3 -- R25
 
 exit_code_ = nil
 
@@ -110,9 +110,9 @@ local sub_stage_nav_button = nil         -- R36
 
 -- selected buttons on each of the previews
 local preview_selected_buttons = { }         -- R37
-local preview_selected_index   = -1          -- R38
-local local39 = -1          -- R39
-local local40 = -1          -- R40
+local current_selected_preview   = -1          -- R38
+local highlighed_preview = -1          -- R39
+local prev_highlighed_preview = -1          -- R40
 local current_selected_panel = -1            -- R41
 
 --[[
@@ -147,8 +147,8 @@ local StagePreview = {           -- R42
 -- Array of stage previews with length 3 (value of USE_STAGE_MAX)
 local stage_previews = {}          -- R43
 
-local local44 = false           -- R44
-local local45 = false           -- R45
+local is_invalid_stage_2 = false           -- R44
+local prev_invalid_stage_2 = false           -- R45
 
 --[[
 Data Type: StagePanel
@@ -196,7 +196,7 @@ Members:
 local Medal = {           -- R49
     new = function ()
         return {
-            state_ = local10,
+            state_ = MEDAL_STATE_WAITING,
             put_index_ = UI_INVALID_INDEX,
             take_animation_ = nil,
             is_sub_stage_ = false
@@ -219,15 +219,15 @@ local tab_form_button_pane = nil         -- R54
 -- Array of buttons in the root selector
 local main_buttons = {}          -- R55
 local is_canceling = false       -- R56
-local local57 = false       -- R57
-local local58 = false       -- R58
+local ignore_cancel_input = false       -- R57
+local is_hand_interpolated_moving = false       -- R58
 local should_play_cursor_sound = true        -- R59
-local local60 = false       -- R60
+local is_page_changing = false       -- R60
 local long_cancel_se = nil         -- R61
 
 -- The animation to transition to the next scene, gotten from `root_view`
 local next_scene_animation = nil         -- R62
-local local63 = local22     -- R63
+local scene_state = SCENE_STATE_REGULAR     -- R63
 
 -- Performs interpolation of a value using a sin wave for a more natural curve than just linear
 -- CLOSURE_4, R64
@@ -433,14 +433,14 @@ local set_stage_preview_form = function(preview_index, stage_form)
         if UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", preview_index) == true then
             local training_form = UiScriptPlayer.invoke("get_stage_fixed_form_type", preview_index)
             UiScriptPlayer.invoke("set_stage_form_type_stage_preview", preview_index, training_form)
-            if preview_index == preview_selected_index then
+            if preview_index == current_selected_preview then
                 set_tab_form_text(training_form)
             end
             return
         end
         stage_previews[preview_index + 1].form_type_ = stage_form
         UiScriptPlayer.invoke("set_stage_form_type_stage_preview", preview_index, stage_form)
-        if preview_index == preview_selected_index then
+        if preview_index == current_selected_preview then
             set_tab_form_text(stage_form)
         end
     end
@@ -545,7 +545,7 @@ end
 -- Plays the cursor sound
 -- CLOSURE_35, R95
 local play_cursor_sound = function()
-    if should_play_cursor_sound == true and local60 == false then
+    if should_play_cursor_sound == true and is_page_changing == false then
         UiSoundManager.play_se(UI_SE_ID_CURSOR)
     end
     should_play_cursor_sound = true
@@ -633,27 +633,27 @@ local switch_stage_preview = function(preview_id)
         preview_id = USE_STAGE_NUM - 1
     end
 
-    if preview_selected_index == preview_id then
+    if current_selected_preview == preview_id then
         return
     end
 
-    play_un_select_animation(preview_selected_index)
-    play_off_preview_animation(preview_selected_index)
+    play_un_select_animation(current_selected_preview)
+    play_off_preview_animation(current_selected_preview)
     play_select_animation(preview_id)
 
-    UiScriptPlayer.invoke("set_enable_shortcut_button_stage_preview", preview_selected_index, false)
+    UiScriptPlayer.invoke("set_enable_shortcut_button_stage_preview", current_selected_preview, false)
     UiScriptPlayer.invoke("set_enable_shortcut_button_stage_preview", preview_id, true)
 
-    preview_selected_index = preview_id
+    current_selected_preview = preview_id
 
-    local preview = stage_previews[preview_selected_index + 1]
+    local preview = stage_previews[current_selected_preview + 1]
     if preview.is_sub_stage_ == false then
         if preview.panel_id_ ~= UI_INVALID_INDEX then
             should_play_cursor_sound = false
             change_panel(preview.panel_id_)
             should_play_cursor_sound = true
         end
-        set_stage_preview_form(preview_selected_index, preview.form_type_)
+        set_stage_preview_form(current_selected_preview, preview.form_type_)
     else
         set_tab_form_text(preview.form_type_)
     end
@@ -695,7 +695,7 @@ end
 local grab_medal = function(medal_id, update_hand)
     UiScriptPlayer.invoke("set_medal_grabbed", medal_id, update_hand, false)
     if update_hand == true then
-        set_medal_info(medal_id, local9, false)
+        set_medal_info(medal_id, MEDAL_STATE_ACTIVE, false)
         UiScriptPlayer.invoke("set_hand_grabbed", true)
         medals[medal_id + 1].take_animation_:stop_at_end()
     end
@@ -710,9 +710,9 @@ local update_medal_visibility = function()
 
     for i=0, USE_STAGE_NUM - 1, 1 do
         if UiScriptPlayer.invoke("is_medal_grabbed", i) == true then
-            if i ~= preview_selected_index then
+            if i ~= current_selected_preview then
                 UiScriptPlayer.invoke("set_medal_visible", i, false)
-                set_medal_info(i, local10, false)
+                set_medal_info(i, MEDAL_STATE_WAITING, false)
             end
         end
     end
@@ -722,7 +722,7 @@ end
 local update_medal = function()
     local index = get_current_medal_index()
     if index ~= UI_INVALID_INDEX and stage_previews[index + 1].enable_ == true then
-        if index == preview_selected_index then
+        if index == current_selected_preview then
             if check_all_previews_enabled() == true then
                 play_select_animation(index)
             end
@@ -730,24 +730,24 @@ local update_medal = function()
             switch_stage_preview(index)
         end
 
-        grab_medal(preview_selected_index, true)
-        UiScriptPlayer.invoke("cancel_medal_sub_list", preview_selected_index)
-        disable_stage_preview(preview_selected_index)
-        play_un_decide_animation(preview_selected_index)
-        UiScriptPlayer.invoke("move_medal_interpolated_from_hand", preview_selected_index)
+        grab_medal(current_selected_preview, true)
+        UiScriptPlayer.invoke("cancel_medal_sub_list", current_selected_preview)
+        disable_stage_preview(current_selected_preview)
+        play_un_decide_animation(current_selected_preview)
+        UiScriptPlayer.invoke("move_medal_interpolated_from_hand", current_selected_preview)
         return
     end
 end
 
 -- CLOSURE_48, R108
-local local108 = function()
-    local medal = medals[preview_selected_index + 1]
-    if medal.state_ ~= local9 then
-        grab_medal(preview_selected_index, true)
-        UiScriptPlayer.invoke("cancel_medal_sub_list", preview_selected_index)
-        disable_stage_preview(preview_selected_index)
-        play_un_decide_animation(preview_selected_index)
-        UiScriptPlayer.invoke("move_hand_interpolated_from_medal", preview_selected_index)
+local un_decide_medal = function()
+    local medal = medals[current_selected_preview + 1]
+    if medal.state_ ~= MEDAL_STATE_ACTIVE then
+        grab_medal(current_selected_preview, true)
+        UiScriptPlayer.invoke("cancel_medal_sub_list", current_selected_preview)
+        disable_stage_preview(current_selected_preview)
+        play_un_decide_animation(current_selected_preview)
+        UiScriptPlayer.invoke("move_hand_interpolated_from_medal", current_selected_preview)
         update_medal_visibility()
     end
 end
@@ -784,7 +784,7 @@ local change_page = function(should_play_page_change)
         make_select = true
     end
 
-    local60 = true
+    is_page_changing = true
 
     UiScriptPlayer.invoke("set_se_unique_counter", "se_system_cursor", 2)
     UiScriptPlayer.invoke("set_hand_medal_range", tab_index)
@@ -799,7 +799,7 @@ local change_page = function(should_play_page_change)
     set_main_button_active(BUTTON_TAB_SUB, normal_select)
     for i=0, USE_STAGE_NUM - 1, 1 do
         local medal = medals[i + 1]
-        if medal.state_ == local11 then
+        if medal.state_ == MEDAL_STATE_PLACED then
             if medal.is_sub_stage_ == false then
                 UiScriptPlayer.invoke("set_medal_visible", i, normal_select)
             else
@@ -823,7 +823,7 @@ local change_page = function(should_play_page_change)
         if UiScriptPlayer.invoke("get_hand_on_stage_sub_id") == UI_INVALID_INDEX then
             stage_sub_selector_info.select_sub_id_ = UI_INVALID_INDEX
             stage_sub_list_selector_:select_item(stage_sub_selector_info.select_sub_id_, true)
-            set_stage_preview_from_sub_stage_panel(preview_selected_index, stage_sub_selector_info.select_sub_id_)
+            set_stage_preview_from_sub_stage_panel(current_selected_preview, stage_sub_selector_info.select_sub_id_)
         end
     end
 
@@ -831,7 +831,7 @@ local change_page = function(should_play_page_change)
         local medal_anim = "stage_make"
         if normal_select == true then
             current_selected_panel = UI_INVALID_INDEX
-            local form = stage_previews[preview_selected_index + 1].form_type_
+            local form = stage_previews[current_selected_preview + 1].form_type_
             if form == STAGE_FORM_TYPE_BATTLE then
                 medal_anim = "stage_battlefield"
             elseif form == STAGE_FORM_TYPE_END then
@@ -842,7 +842,7 @@ local change_page = function(should_play_page_change)
         else
             stage_sub_selector_info.select_sub_id_ = UI_INVALID_INDEX
         end
-        local parts = root_view:get_parts(get_medal_name(preview_selected_index))
+        local parts = root_view:get_parts(get_medal_name(current_selected_preview))
         parts:play_animation(medal_anim, 1.0)
     end
 
@@ -898,8 +898,8 @@ local setup = function()
     navigation_button_selector = LayoutButtonSelector.new()
     navigation_button_selector:setup(root_view, "selector_1", config)
 
-    navigation_button_selector:setup_button(button_id_sub_stage_up, "set_parts_btn_csr_t")
-    navigation_button_selector:setup_button(button_id_sub_stage_down, "set_parts_btn_csr_b")
+    navigation_button_selector:setup_button(BUTTON_ID_SUB_STAGE_UP, "set_parts_btn_csr_t")
+    navigation_button_selector:setup_button(BUTTON_ID_SUB_STAGE_DOWN, "set_parts_btn_csr_b")
 
     sub_stage_nav_button = SelectedButton.new()
 
@@ -956,14 +956,14 @@ end
 -- CLOSURE_53, R113
 local setup_from_environment = function()
     local last_enabled_preview = 0
-    local current_id, unk2 = nil
+    local current_id, unused_variable = nil -- unused variable to match register usage, not sure why
 
-    local39 = UI_INVALID_INDEX
-    local40 = UI_INVALID_INDEX
+    highlighed_preview = UI_INVALID_INDEX
+    prev_highlighed_preview = UI_INVALID_INDEX
     current_selected_panel = UI_INVALID_INDEX
     tab_index = TAB_SWITCH_NORMAL
 
-    local58 = false
+    is_hand_interpolated_moving = false
     should_play_cursor_sound = false
     tab_layout = root_view:get_parts("set_parts_btn_normal")
     tab_form_button_pane = tab_layout:get_pane("set_txt_normal")
@@ -1013,7 +1013,7 @@ local setup_from_environment = function()
                 UiScriptPlayer.invoke("put_medal_sub_list", current_id, preview.panel_id_, true)
             end
             UiScriptPlayer.invoke("set_medal_grabbed", current_id, false, true)
-            set_medal_info(current_id, local11, preview.is_sub_stage_)
+            set_medal_info(current_id, MEDAL_STATE_PLACED, preview.is_sub_stage_)
         else
             preview.panel_id_ = UI_INVALID_INDEX
             preview.form_type_ = DEFAULT_STAGE_FORM_TYPE
@@ -1023,17 +1023,17 @@ local setup_from_environment = function()
     end
 
     if 0 < last_enabled_preview then
-        local unk3 = false
+        local dont_set_hand_by_panel = false
         if IS_SELECT_FROM_FIRST == true then
             switch_stage_preview(0)
         elseif check_all_previews_enabled() == true then
             switch_stage_preview(USE_STAGE_NUM - 1)
         else
             switch_stage_preview(last_enabled_preview)
-            unk3 = true
+            dont_set_hand_by_panel = true
         end
-        if unk3 == false then
-            local preview = stage_previews[preview_selected_index + 1]
+        if dont_set_hand_by_panel == false then
+            local preview = stage_previews[current_selected_preview + 1]
             if preview.is_sub_stage_ == false then
                 UiScriptPlayer.invoke("set_hand_position_from_panel", preview.panel_id_)
             else
@@ -1041,18 +1041,18 @@ local setup_from_environment = function()
                 stage_sub_selector_info.waiting_in_ = true
             end
         else
-            init_medal(preview_selected_index)
+            init_medal(current_selected_preview)
         end
-        grab_medal(preview_selected_index, true)
-        UiScriptPlayer.invoke("cancel_medal_sub_list", preview_selected_index)
-        disable_stage_preview(preview_selected_index)
-        play_un_decide_animation(preview_selected_index)
+        grab_medal(current_selected_preview, true)
+        UiScriptPlayer.invoke("cancel_medal_sub_list", current_selected_preview)
+        disable_stage_preview(current_selected_preview)
+        play_un_decide_animation(current_selected_preview)
     else
         switch_stage_preview(0)
-        init_medal(preview_selected_index)
+        init_medal(current_selected_preview)
         set_stage_preview_from_stage_panel(0, 0)
-        grab_medal(preview_selected_index, true)
-        UiScriptPlayer.invoke("cancel_medal_sub_list", preview_selected_index)
+        grab_medal(current_selected_preview, true)
+        UiScriptPlayer.invoke("cancel_medal_sub_list", current_selected_preview)
     end
 
     if IS_MODE_STAGE_2_CHANGE == true or IS_MODE_KUMITE == true or IS_MENU_FILTER == true or IS_MY_MUSIC == true or IS_EMPTY_STAGE_SUB_LIST == true or USABLE_SUB_STAGE == false then
@@ -1063,7 +1063,7 @@ local setup_from_environment = function()
         root_view:play_animation("tab_position_00", 1.0)
         change_page(false)
         if tab_index == TAB_SWITCH_SUB then
-            local medal = medals[preview_selected_index + 1]
+            local medal = medals[current_selected_preview + 1]
             local is_visible = UiScriptPlayer.invoke("ensure_visible_sub_list", medal.put_index_, false)
             if is_visible == false then
                 stage_sub_list_selector_:redraw_all_items()
@@ -1106,19 +1106,19 @@ end
 local cancel = function()
     exit_code_ = SCENE_EXIT_CODE_CANCEL
     UiSoundManager.play_se(UI_SE_ID_CANCEL)
-    if UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", preview_selected_index) == true then
+    if UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", current_selected_preview) == true then
         -- pretty sure this is a bug lol
         -- this variable is mentioned nowhere else (preview_id)
         local form = UiScriptPlayer.invoke("get_stage_fixed_form_type", preview_id)
-        local preview = stage_previews[preview_selected_index + 1]
+        local preview = stage_previews[current_selected_preview + 1]
         if preview.form_type_ ~= form then
             preview.form_type_ = form
         end
     end
 
-    set_stage_preview_from_stage_panel(preview_selected_index, UI_INVALID_INDEX)
+    set_stage_preview_from_stage_panel(current_selected_preview, UI_INVALID_INDEX)
     if tab_index == TAB_SWITCH_SUB then
-        local medal_parts = root_view:get_parts(get_medal_name(preview_selected_index))
+        local medal_parts = root_view:get_parts(get_medal_name(current_selected_preview))
         medal_parts:play_animation("stage_make", 1.0)
     end
 end
@@ -1130,18 +1130,18 @@ local exit_normal = function()
 end
 
 -- CLOSURE_56, R116
-local local116 = function()
-    if local63 == local22 then
-        local63 = local23
+local prepare_scene_exit = function()
+    if scene_state == SCENE_STATE_REGULAR then
+        scene_state = SCENE_STATE_SHOULD_EXIT
         return true
     end
     return false
 end
 
 -- CLOSURE_57, R117
-local local117 = function(is_cancel, play_catch_se)
-    if (is_cancel == true or virtual_input:is_cancel() == true) and check_all_previews_disabled() == false then
-        local prev_selected_index = preview_selected_index
+local un_decide = function(ignore_cancel_input, play_catch_se)
+    if (ignore_cancel_input == true or virtual_input:is_cancel() == true) and check_all_previews_disabled() == false then
+        local prev_selected_index = current_selected_preview
         local last_enabled = get_last_enabled_preview()
         local preview = stage_previews[last_enabled + 1]
         if preview.is_sub_stage_ == false then
@@ -1165,16 +1165,16 @@ local local117 = function(is_cancel, play_catch_se)
         if check_all_previews_enabled() == false then
             UiScriptPlayer.invoke("set_enable_shortcut_button_stage_preview", prev_selected_index, true)
             set_stage_preview_from_stage_panel(prev_selected_index, UI_INVALID_INDEX)
-            if IS_MODE_STAGE_2_CHANGE == true and local44 == true then
+            if IS_MODE_STAGE_2_CHANGE == true and is_invalid_stage_2 == true then
                 root_view:play_animation_parts(get_stage_preview_name(prev_selected_index), "off_atteintion")
-                local44 = false
-                local45 = false
+                is_invalid_stage_2 = false
+                prev_invalid_stage_2 = false
             end
-        elseif preview_selected_index ~= prev_selected_index then
-            play_select_animation(preview_selected_index)
+        elseif current_selected_preview ~= prev_selected_index then
+            play_select_animation(current_selected_preview)
         end
 
-        local108()
+        un_decide_medal()
         if play_catch_se == true then
             UiSoundManager.play_se_label("se_system_plate_catch")
         end
@@ -1230,9 +1230,9 @@ local check_for_cancel = function()
     if check_all_previews_disabled() == true then
         is_cancel_input = virtual_input:is_pressing(INPUT_CANCEL)
     end
-    if local57 == true then
+    if ignore_cancel_input == true then
         if is_cancel_input == false then
-            local57 = false
+            ignore_cancel_input = false
         end
         return false
     end
@@ -1263,13 +1263,13 @@ end
 local cycle_stage_form = function()
     if tab_index == TAB_SWITCH_NORMAL then
         if ENABLE_STAGE_FORM_TYPE == true then
-            local next_form = get_next_stage_form(stage_previews[preview_selected_index + 1].form_type_)
-            set_stage_preview_form(preview_selected_index, next_form)
-            switch_stage_form(preview_selected_index, next_form)
+            local next_form = get_next_stage_form(stage_previews[current_selected_preview + 1].form_type_)
+            set_stage_preview_form(current_selected_preview, next_form)
+            switch_stage_form(current_selected_preview, next_form)
             for i=1, USE_STAGE_NUM, 1 do
                 local preview = stage_previews[i]
                 if preview.enable_ == false then
-                    if i - 1 ~= preview_selected_index then
+                    if i - 1 ~= current_selected_preview then
                         preview.form_type_ = next_form
                     end
                     local is_fixed = UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", i - 1)
@@ -1326,7 +1326,7 @@ end
 -- Opens the bgm selection menu
 -- CLOSURE_65, R125
 local open_bgm_select = function(preview_id, show_hand)
-    if ENABLE_SELECT_BGM == false or local44 == true then
+    if ENABLE_SELECT_BGM == false or is_invalid_stage_2 == true then
         return
     end
 
@@ -1334,8 +1334,8 @@ local open_bgm_select = function(preview_id, show_hand)
         return
     end
 
-    if local39 ~= UI_INVALID_INDEX then
-        if stage_previews[local39 + 1].is_sub_stage_ == true then
+    if highlighed_preview ~= UI_INVALID_INDEX then
+        if stage_previews[highlighed_preview + 1].is_sub_stage_ == true then
             return
         end
     elseif tab_index == TAB_SWITCH_SUB then
@@ -1344,11 +1344,11 @@ local open_bgm_select = function(preview_id, show_hand)
 
     if UiScriptPlayer.invoke("is_empty_stage_preview", preview_id) == false then
         stop_canceling()
-        local unk2 = false
-        if preview_id == preview_selected_index and check_all_previews_enabled() == false then
-            unk2 = true
+        local bgm_arg = false
+        if preview_id == current_selected_preview and check_all_previews_enabled() == false then
+            bgm_arg = true
         end
-        stage_select_bgm:activate(preview_id, unk2, true)
+        stage_select_bgm:activate(preview_id, bgm_arg, true)
         stage_select_bgm.layout_update_function = update_stage_preview_bgm_select
         show_scene_and_hand(false, show_hand)
     end
@@ -1375,7 +1375,7 @@ local decide_normal_stage = function()
         return false
     end
 
-    if local44 == true then
+    if is_invalid_stage_2 == true then
         return false
     end
     
@@ -1383,22 +1383,22 @@ local decide_normal_stage = function()
         return false
     end
 
-    UiScriptPlayer.invoke("set_medal_visible", preview_selected_index, true)
-    UiScriptPlayer.invoke("set_medal_collect_range_from_panel", preview_selected_index, current_selected_panel)
+    UiScriptPlayer.invoke("set_medal_visible", current_selected_preview, true)
+    UiScriptPlayer.invoke("set_medal_collect_range_from_panel", current_selected_preview, current_selected_panel)
     if UiScriptPlayer.invoke("is_hand_interpolated_moving") == false then
-        UiScriptPlayer.invoke("set_medal_position_from_hand", preview_selected_index)
+        UiScriptPlayer.invoke("set_medal_position_from_hand", current_selected_preview)
     end
 
-    grab_medal(preview_selected_index, false)
+    grab_medal(current_selected_preview, false)
 
-    set_medal_info(preview_selected_index, local11, false)
+    set_medal_info(current_selected_preview, MEDAL_STATE_PLACED, false)
 
-    medals[preview_selected_index + 1].put_index_ = current_selected_panel
+    medals[current_selected_preview + 1].put_index_ = current_selected_panel
 
-    enable_stage_preview(preview_selected_index, current_selected_panel, false)
-    UiScriptPlayer.invoke("set_extra_command_stage_preview", preview_selected_index)
+    enable_stage_preview(current_selected_preview, current_selected_panel, false)
+    UiScriptPlayer.invoke("set_extra_command_stage_preview", current_selected_preview)
 
-    play_decide_stage_animation(preview_selected_index)
+    play_decide_stage_animation(current_selected_preview)
 
     return true
 end
@@ -1417,7 +1417,7 @@ local decide_sub_stage = function()
         return false
     end
 
-    if local44 == true then
+    if is_invalid_stage_2 == true then
         return false
     end
 
@@ -1456,18 +1456,18 @@ local decide_sub_stage = function()
         return false
     end
 
-    UiScriptPlayer.invoke("put_medal_sub_list", preview_selected_index, stage_sub_selector_info.select_sub_id_, false)
-    grab_medal(preview_selected_index, false)
-    set_medal_info(preview_selected_index, local11, true)
-    medals[preview_selected_index + 1].put_index_ = stage_sub_selector_info.select_sub_id_
-    enable_stage_preview(preview_selected_index, stage_sub_selector_info.select_sub_id_, true)
-    play_decide_stage_animation(preview_selected_index)
+    UiScriptPlayer.invoke("put_medal_sub_list", current_selected_preview, stage_sub_selector_info.select_sub_id_, false)
+    grab_medal(current_selected_preview, false)
+    set_medal_info(current_selected_preview, MEDAL_STATE_PLACED, true)
+    medals[current_selected_preview + 1].put_index_ = stage_sub_selector_info.select_sub_id_
+    enable_stage_preview(current_selected_preview, stage_sub_selector_info.select_sub_id_, true)
+    play_decide_stage_animation(current_selected_preview)
     stage_sub_selector_info.select_sub_id_ = UI_INVALID_INDEX
     return true
 end
 
 -- CLOSURE_69, R129
-local local129 = function()
+local handle_panel_decide = function()
     local decided = false
     if tab_index == TAB_SWITCH_NORMAL then
         decided = decide_normal_stage()
@@ -1490,31 +1490,31 @@ local local129 = function()
 
     if check_all_previews_enabled() == true then
         UiScriptPlayer.invoke("set_hand_grabbed", false)
-        play_off_preview_animation(preview_selected_index)
+        play_off_preview_animation(current_selected_preview)
         if tab_index == TAB_SWITCH_NORMAL then
             change_panel(UI_INVALID_INDEX)
         elseif stage_sub_list_selector_ ~= nil then
             stage_sub_list_selector_:set_focus(false)
         end
-        local116()
+        prepare_scene_exit()
         UiScriptPlayer.invoke("set_hand_grabable", false)
         UiScriptPlayer.invoke("set_hand_operatable", false)
     else
         UiScriptPlayer.invoke("play_hand_released")
         switch_stage_preview(get_next_disabled_preview())
-        UiScriptPlayer.invoke("set_medal_visible", preview_selected_index, true)
-        set_medal_info(preview_selected_index, local9, false)
+        UiScriptPlayer.invoke("set_medal_visible", current_selected_preview, true)
+        set_medal_info(current_selected_preview, MEDAL_STATE_ACTIVE, false)
         if IS_MODE_STAGE_2_CHANGE == true and UiScriptPlayer.invoke("is_random_stage_preview", 0) == false then
             UiScriptPlayer.invoke("move_hand_interpolated", 50.0, -50.0)
         else
-            set_stage_preview_from_stage_panel(preview_selected_index, current_selected_panel)
+            set_stage_preview_from_stage_panel(current_selected_preview, current_selected_panel)
             if tab_index == TAB_SWITCH_NORMAL then
-                UiScriptPlayer.invoke("set_enable_shortcut_button_stage_preview", preview_selected_index, true)
+                UiScriptPlayer.invoke("set_enable_shortcut_button_stage_preview", current_selected_preview, true)
             end
         end
 
         if tab_index == TAB_SWITCH_SUB then
-            local medal_parts = root_view:get_parts(get_medal_name(preview_selected_index))
+            local medal_parts = root_view:get_parts(get_medal_name(current_selected_preview))
             medal_parts:play_animation("stage_make", 1.0)
         end
     end
@@ -1572,9 +1572,9 @@ local handle_button_decide = function()
     local nav_decided = sub_stage_nav_button.decided_button_id_
     if nav_decided ~= UI_INVALID_INDEX then
         local scroll_amount = nil
-        if nav_decided == button_id_sub_stage_up then
+        if nav_decided == BUTTON_ID_SUB_STAGE_UP then
             scroll_amount = -STAGE_SUB_LIST_PAGE_SCROLL_VALUE
-        elseif nav_decided == button_id_sub_stage_down then
+        elseif nav_decided == BUTTON_ID_SUB_STAGE_DOWN then
             scroll_amount = STAGE_SUB_LIST_PAGE_SCROLL_VALUE
         end
         stage_sub_selector_info.scroll_value_ = stage_sub_selector_info.scroll_value_ + scroll_amount
@@ -1588,38 +1588,38 @@ local handle_button_decide = function()
 end
 
 -- CLOSURE_71, R131
-local local131 = function()
+local normal_tab_main_update = function()
     if check_all_previews_enabled() == false then
         if UiScriptPlayer.invoke("is_hand_interpolated_moving") == false then
             local panel_id = UiScriptPlayer.invoke("get_hand_on_stage_panel_id")
-            if change_panel(panel_id) == true or local58 == true then
-                if UiScriptPlayer.invoke("is_training_stage_preview", preview_selected_index) == true then
-                    local preview = stage_previews[preview_selected_index + 1]
+            if change_panel(panel_id) == true or is_hand_interpolated_moving == true then
+                if UiScriptPlayer.invoke("is_training_stage_preview", current_selected_preview) == true then
+                    local preview = stage_previews[current_selected_preview + 1]
                     if preview.form_type_ ~= STAGE_FORM_TYPE_NORMAL and preview.form_type_blink_counter_ <= 0 then
                         preview.form_type_parts_:play_animation("blink_on", 1.0)
                     end
                     preview.form_type_parts_:play_animation("able_shortcut", 1.0)
                 end
-                set_stage_preview_from_stage_panel(preview_selected_index, current_selected_panel)
+                set_stage_preview_from_stage_panel(current_selected_preview, current_selected_panel)
 
                 if tab_index == TAB_SWITCH_NORMAL then
-                    UiScriptPlayer.invoke("set_enable_shortcut_button_stage_preview", preview_selected_index, true)
+                    UiScriptPlayer.invoke("set_enable_shortcut_button_stage_preview", current_selected_preview, true)
                 end
 
-                if UiScriptPlayer.invoke("is_training_stage_preview", preview_selected_index) == true then
-                    local preview = stage_previews[preview_selected_index + 1]
+                if UiScriptPlayer.invoke("is_training_stage_preview", current_selected_preview) == true then
+                    local preview = stage_previews[current_selected_preview + 1]
                     preview.form_type_parts_:play_animation("unable_shortcut", 1.0)
                 end
             end
-            local58 = false
+            is_hand_interpolated_moving = false
         else
-            local58 = true
+            is_hand_interpolated_moving = true
         end
     end
 end
 
 -- CLOSURE_72, R132
-local local132 = function()
+local sub_tab_main_update = function()
     if stage_sub_list_selector_ == nil then
         return
     end
@@ -1658,29 +1658,29 @@ local local132 = function()
     end
 
     if UiScriptPlayer.invoke("is_top_sub_list") == true then
-        if navigation_button_selector:is_selectable(button_id_sub_stage_up) == true then
-            navigation_button_selector:set_selectable(button_id_sub_stage_up, false)
+        if navigation_button_selector:is_selectable(BUTTON_ID_SUB_STAGE_UP) == true then
+            navigation_button_selector:set_selectable(BUTTON_ID_SUB_STAGE_UP, false)
         end
-    elseif navigation_button_selector:is_selectable(button_id_sub_stage_up) == false then
-        navigation_button_selector:set_selectable(button_id_sub_stage_up, true)
+    elseif navigation_button_selector:is_selectable(BUTTON_ID_SUB_STAGE_UP) == false then
+        navigation_button_selector:set_selectable(BUTTON_ID_SUB_STAGE_UP, true)
     end
 
     if UiScriptPlayer.invoke("is_lowest_sub_list") == true then
-        if navigation_button_selector:is_selectable(button_id_sub_stage_down) == true then
-            navigation_button_selector:set_selectable(button_id_sub_stage_down, false)
+        if navigation_button_selector:is_selectable(BUTTON_ID_SUB_STAGE_DOWN) == true then
+            navigation_button_selector:set_selectable(BUTTON_ID_SUB_STAGE_DOWN, false)
         end
-    elseif navigation_button_selector:is_selectable(button_id_sub_stage_down) == false then
-        navigation_button_selector:set_selectable(button_id_sub_stage_down, true)
+    elseif navigation_button_selector:is_selectable(BUTTON_ID_SUB_STAGE_DOWN) == false then
+        navigation_button_selector:set_selectable(BUTTON_ID_SUB_STAGE_DOWN, true)
     end
 
     if stage_sub_selector_info.scroll_value_ == 0.0 then
         local scroll_difference = 0.0
         if virtual_input:is_pressing(INPUT_SUB_PAGE_UP) == true then
-            if navigation_button_selector:is_selectable(button_id_sub_stage_up) == true then
+            if navigation_button_selector:is_selectable(BUTTON_ID_SUB_STAGE_UP) == true then
                 scroll_difference = -STAGE_SUB_LIST_PAGE_SCROLL_VALUE
             end
         elseif virtual_input:is_pressing(INPUT_SUB_PAGE_DOWN) == true then
-            if navigation_button_selector:is_selectable(button_id_sub_stage_down) == true then
+            if navigation_button_selector:is_selectable(BUTTON_ID_SUB_STAGE_DOWN) == true then
                 scroll_difference = STAGE_SUB_LIST_PAGE_SCROLL_VALUE
             end
         end
@@ -1712,7 +1712,7 @@ local local132 = function()
                     play_cursor_sound()
                 end
             end
-            set_stage_preview_from_sub_stage_panel(preview_selected_index, stage_sub_selector_info.select_sub_id_)
+            set_stage_preview_from_sub_stage_panel(current_selected_preview, stage_sub_selector_info.select_sub_id_)
         end
     end
 end
@@ -1734,47 +1734,47 @@ local update_preview_blink = function(preview_id, preview)
 end
 
 -- CLOSURE_74, R134
-local local134 = function()
-    local40 = local39
+local update_stage_previews = function()
+    prev_highlighed_preview = highlighed_preview
 
-    local39 =  UiScriptPlayer.invoke("get_hand_on_stage_preview_id")
+    highlighed_preview =  UiScriptPlayer.invoke("get_hand_on_stage_preview_id")
 
-    if local39 ~= UI_INVALID_INDEX then
-        if stage_previews[local39 + 1].enable_ == false then
-            if local40 ~= UI_INVALID_INDEX then
-                advance_stage_preview(local39, local40)
+    if highlighed_preview ~= UI_INVALID_INDEX then
+        if stage_previews[highlighed_preview + 1].enable_ == false then
+            if prev_highlighed_preview ~= UI_INVALID_INDEX then
+                advance_stage_preview(highlighed_preview, prev_highlighed_preview)
             end
-            local39 = UI_INVALID_INDEX
-        elseif local39 ~= local40 then
-            if local40 ~= UI_INVALID_INDEX then
-                advance_stage_preview(local39, local40)
-            elseif local39 ~= preview_selected_index then
-                advance_stage_preview(local39, preview_selected_index)
+            highlighed_preview = UI_INVALID_INDEX
+        elseif highlighed_preview ~= prev_highlighed_preview then
+            if prev_highlighed_preview ~= UI_INVALID_INDEX then
+                advance_stage_preview(highlighed_preview, prev_highlighed_preview)
+            elseif highlighed_preview ~= current_selected_preview then
+                advance_stage_preview(highlighed_preview, current_selected_preview)
             end
         end
-    elseif local40 ~= UI_INVALID_INDEX then
-        advance_stage_preview(preview_selected_index, local40)
-        local40 = UI_INVALID_INDEX
+    elseif prev_highlighed_preview ~= UI_INVALID_INDEX then
+        advance_stage_preview(current_selected_preview, prev_highlighed_preview)
+        prev_highlighed_preview = UI_INVALID_INDEX
     end
 
     if ENABLE_STAGE_FORM_TYPE == true and virtual_input:is_pressed(INPUT_STAGE_TYPE) == true then
         local index = UI_INVALID_INDEX
-        if local39 ~= UI_INVALID_INDEX then
-            if UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", local39) == false then
-                local preview = stage_previews[local39 + 1]
+        if highlighed_preview ~= UI_INVALID_INDEX then
+            if UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", highlighed_preview) == false then
+                local preview = stage_previews[highlighed_preview + 1]
                 if preview.enable_ == true and preview.is_sub_stage_ == false then
                     local next_form = get_next_stage_form(preview.form_type_)
-                    set_stage_preview_form(local39, next_form)
-                    switch_stage_form(local39, next_form)
-                    index = local39
+                    set_stage_preview_form(highlighed_preview, next_form)
+                    switch_stage_form(highlighed_preview, next_form)
+                    index = highlighed_preview
                 end
             end
         elseif check_all_previews_enabled() == true or get_panel_id ~= UI_INVALID_INDEX then
-            if UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", preview_selected_index) == false and tab_index == TAB_SWITCH_NORMAL then
-                local next_form = get_next_stage_form(stage_previews[preview_selected_index + 1].form_type_)
-                set_stage_preview_form(preview_selected_index, next_form)
-                switch_stage_form(preview_selected_index, next_form)
-                index = preview_selected_index
+            if UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", current_selected_preview) == false and tab_index == TAB_SWITCH_NORMAL then
+                local next_form = get_next_stage_form(stage_previews[current_selected_preview + 1].form_type_)
+                set_stage_preview_form(current_selected_preview, next_form)
+                switch_stage_form(current_selected_preview, next_form)
+                index = current_selected_preview
             end
         end
         
@@ -1790,40 +1790,40 @@ local local134 = function()
     end
 
     for i=1, USE_STAGE_NUM, 1 do
-        local button_id = BUTTON_FORM_TYPE_0 + (i - 1) * local21
+        local button_id = BUTTON_FORM_TYPE_0 + (i - 1) * PREVIEW_BUTTON_COUNT
         local selected = preview_selected_buttons[i].selected_button_id_ - button_id
-        local unk6 = false
-        if local39 == i - 1 then
-            unk6 = true
+        local is_selected_preview = false
+        if highlighed_preview == i - 1 then
+            is_selected_preview = true
         end
         local preview = stage_previews[i]
-        if preview.on_button_form_type_ == false and selected == local19 then
+        if preview.on_button_form_type_ == false and selected == BUTTON_ID_FORM_TYPE then
             if preview.form_type_ == STAGE_FORM_TYPE_NORMAL then
                 preview.form_type_parts_:play_animation("blink_on", 1.0)
             end
             preview.form_type_parts_:play_animation("color_blink_on", 1.0)
             preview.on_button_form_type_ = true
-        elseif preview.on_button_form_type_ == true and selected ~= local19 then
+        elseif preview.on_button_form_type_ == true and selected ~= BUTTON_ID_FORM_TYPE then
             if preview.form_type_parts_:is_animation_finished("blink_on") == true then
                 if preview.form_type_ == STAGE_FORM_TYPE_NORMAL or UiScriptPlayer.invoke("is_fixed_form_type_stage_preview", i - 1) == true then
                     preview.form_type_parts_:play_animation("blink_off", 1.0)
                     preview.form_type_blink_counter_ = 0
                 end
-                if unk6 == true then
+                if is_selected_preview == true then
                     preview.form_type_parts_:play_animation("color_blink_off", 1.0)
                 end
                 preview.on_button_form_type_ = false
             else
-                preview_selected_buttons[i].selected_button_id_ = local19 + button_id
+                preview_selected_buttons[i].selected_button_id_ = BUTTON_ID_FORM_TYPE + button_id
             end
         end
 
         update_preview_blink(i, preview)
-        if preview.on_button_music_ == false and selected == local20 then
+        if preview.on_button_music_ == false and selected == BUTTON_ID_MUSC_SELECT then
             preview.music_parts_:play_animation("color_blink_on", 1.0)
             preview.on_button_music_ = true
-        elseif preview.on_button_music_ == true and selected ~= local20 then
-            if unk6 == true then
+        elseif preview.on_button_music_ == true and selected ~= BUTTON_ID_MUSC_SELECT then
+            if is_selected_preview == true then
                 preview.music_parts_:play_animation("color_blink_off", 1.0)
             end
             preview.on_button_music_ = false
@@ -1831,14 +1831,14 @@ local local134 = function()
     end
 
     if IS_MODE_STAGE_2_CHANGE == true and UiScriptPlayer.invoke("is_hand_interpolated_moving") == false then
-        if local44 ~= local45 then
+        if is_invalid_stage_2 ~= prev_invalid_stage_2 then
             local anim = "on_atteintion"
-            if local44 == false then
+            if is_invalid_stage_2 == false then
                 anim = "off_atteintion"
             end
-            root_view:play_animation_parts(get_stage_preview_name(preview_selected_index), anim)
+            root_view:play_animation_parts(get_stage_preview_name(current_selected_preview), anim)
         end
-        local45 = local44
+        prev_invalid_stage_2 = is_invalid_stage_2
     end
         
 end
@@ -1868,7 +1868,7 @@ local update_panel_scalings = function()
 end
 
 -- CLOSURE_77, R136
-local local136 = function()
+local update_both_tabs = function()
     if allow_sub_stage == true then
         if virtual_input:is_pressed(INPUT_TAB_CHANGE_L) == true then
             if tab_index ~= TAB_SWITCH_NORMAL then
@@ -1882,12 +1882,12 @@ local local136 = function()
     end
 
     if tab_index == TAB_SWITCH_NORMAL then
-        local131()
+        normal_tab_main_update()
     else
-        local132()
+        sub_tab_main_update()
     end
 
-    local134()
+    update_stage_previews()
     update_panel_scalings()
     local is_medal_display = false
     if UiScriptPlayer.invoke("is_medal_display_from_hand") == true and get_current_medal_index() ~= UI_INVALID_INDEX then
@@ -1896,35 +1896,35 @@ local local136 = function()
 
     UiScriptPlayer.invoke("set_hand_grabable", is_medal_display)
 
-    local unk1 = false
-    local unk2 = false
+    local is_sub_stage_button = false
+    local is_button_selected = false
     if root_selected_button.selected_button_id_ >= 0 then
-        unk2 = true
+        is_button_selected = true
     elseif back_button.selected_button_id_ >= 0 then
-        unk2 = true
+        is_button_selected = true
     elseif sub_stage_nav_button.selected_button_id_ >= 0 then
-        unk2 = true
-        unk1 = true
+        is_button_selected = true
+        is_sub_stage_button = true
     else
         for i=1, USE_STAGE_NUM, 1 do
             if preview_selected_buttons[i].selected_button_id_ >= 0 then
-                unk2 = true
+                is_button_selected = true
                 break
             end
         end
     end
 
-    UiScriptPlayer.invoke("set_hand_operatable", unk2)
-    if unk1 == true then
+    UiScriptPlayer.invoke("set_hand_operatable", is_button_selected)
+    if is_sub_stage_button == true then
         if check_all_previews_enabled() == false then
             stage_sub_scroll_button_operatable_ = true
             UiScriptPlayer.invoke("set_hand_grabbed", false)
-            UiScriptPlayer.invoke("set_medal_visible", preview_selected_index, false)
+            UiScriptPlayer.invoke("set_medal_visible", current_selected_preview, false)
         end
     elseif stage_sub_scroll_button_operatable_ == true then
         stage_sub_scroll_button_operatable_ = false
         UiScriptPlayer.invoke("set_hand_grabbed", true)
-        UiScriptPlayer.invoke("set_medal_visible", preview_selected_index, true)
+        UiScriptPlayer.invoke("set_medal_visible", current_selected_preview, true)
     end
 end
 
@@ -1965,19 +1965,19 @@ local update_from_pointer = function()
 end
 
 -- CLOSURE_79, R138
-local local138 = function()
-    if local63 == local22 or local63 == local25 then
+local try_handle_exiting_scene = function()
+    if scene_state == SCENE_STATE_REGULAR or scene_state == SCENE_STATE_EXITED then
         return false
     end
 
     update_panel_scalings()
 
-    if local63 == local23 then
+    if scene_state == SCENE_STATE_SHOULD_EXIT then
         next_scene_animation:play(1.0)
-        local63 = local24
-    elseif local63 == local24 then
+        scene_state = SCENE_STATE_EXITING
+    elseif scene_state == SCENE_STATE_EXITING then
         if next_scene_animation:is_finished() == true then
-            local63 = local25
+            scene_state = SCENE_STATE_EXITED
             return false
         else
 
@@ -2000,17 +2000,17 @@ local local138 = function()
             local is_bgm_pressed = virtual_input:is_pressed(INPUT_BGM_SELECT)
 
             if is_bgm_pressed == true or was_invalid_sub_stage == true or virtual_input:is_cancel() == true or virtual_input:is_pressed(INPUT_STAGE_TYPE) == true then
-                local panel_id = stage_previews[preview_selected_index + 1].panel_id_
+                local panel_id = stage_previews[current_selected_preview + 1].panel_id_
                 next_scene_animation:stop_at_start()
-                local63 = local22
-                local unk3 = true
+                scene_state = SCENE_STATE_REGULAR
+                local should_play_se = true
                 if is_bgm_pressed == true then
-                    unk3 = false
+                    should_play_se = false
                 else
-                    root_view:play_animation_parts(get_stage_preview_name(preview_selected_index), "on_crs_preview_anime")
+                    root_view:play_animation_parts(get_stage_preview_name(current_selected_preview), "on_crs_preview_anime")
                 end
 
-                local117(true, unk3)
+                un_decide(true, should_play_se)
                 if tab_index == TAB_SWITCH_NORMAL then
                     should_play_cursor_sound = false
                     change_panel(panel_id)
@@ -2022,9 +2022,9 @@ local local138 = function()
                     end
                 end
                 if is_bgm_pressed == true then
-                    open_bgm_select(preview_selected_index, false)
+                    open_bgm_select(current_selected_preview, false)
                 elseif check_all_previews_disabled() == true then
-                    local57 = true
+                    ignore_cancel_input = true
                 end
             end
         end
@@ -2033,15 +2033,15 @@ local local138 = function()
 end
 
 -- CLOSURE_80, R139
-local local139 = function()
+local regular_main_update = function()
     set_scene_enable(true)
     repeat
-        local60 = false
-        while local138() == true do
+        is_page_changing = false
+        while try_handle_exiting_scene() == true do
             coroutine.yield()
         end
-
-        if local63 == local25 then
+        
+        if scene_state == SCENE_STATE_EXITED then
             exit_normal()
             break
         end
@@ -2050,24 +2050,24 @@ local local139 = function()
             if handle_button_decide() == false then
 
                 if IS_MODE_STAGE_2_CHANGE == true then
-                    local44 = false
-                    local current_preview_index = preview_selected_index
+                    is_invalid_stage_2 = false
+                    local current_preview_index = current_selected_preview
                     local current_panel = stage_previews[current_preview_index + 1].panel_id_
 
-                    local other_preview_index = preview_selected_index ~ 1
+                    local other_preview_index = current_selected_preview ~ 1
                     local other_panel = stage_previews[other_preview_index + 1].panel_id_
 
                     if 2 < other_panel then
                         if other_panel == current_selected_panel or other_panel == current_panel then
                             if stage_previews[1].form_type_ == stage_previews[2].form_type_ then
-                                local44 = true
+                                is_invalid_stage_2 = true
                             elseif UiScriptPlayer.invoke("is_battle_field_stage_preview", other_preview_index) == true then
                                 if stage_previews[other_preview_index + 1].form_type_ ~= STAGE_FORM_TYPE_END and stage_previews[current_preview_index + 1].form_type_ ~= STAGE_FORM_TYPE_END then
-                                    local44 = true
+                                    is_invalid_stage_2 = true
                                 end
                             elseif UiScriptPlayer.invoke("is_end_stage_preview", other_preview_index) == true then
                                 if stage_previews[other_preview_index + 1].form_type_ ~= STAGE_FORM_TYPE_BATTLE and stage_previews[current_preview_index + 1].form_type_ ~= STAGE_FORM_TYPE_BATTLE then
-                                    local44 = true
+                                    is_invalid_stage_2 = true
                                 end
                             end
                         else
@@ -2078,27 +2078,27 @@ local local139 = function()
                                 if UiScriptPlayer.invoke("is_battle_field_ls_stage_preview", current_preview_index) == true then
                                     if other_form == STAGE_FORM_TYPE_NORMAL or other_form == STAGE_FORM_TYPE_BATTLE then
                                         if current_form == STAGE_FORM_TYPE_BATTLE then
-                                            local44 = true
+                                            is_invalid_stage_2 = true
                                         end
                                     elseif current_form == STAGE_FORM_TYPE_END then
-                                        local44 = true
+                                        is_invalid_stage_2 = true
                                     end
                                 end
                             elseif UiScriptPlayer.invoke("is_battle_field_ls_stage_preview", other_preview_index) == true then
                                 if UiScriptPlayer.invoke("is_battle_field_stage_preview", current_preview_index) == true then
                                     if other_form == STAGE_FORM_TYPE_BATTLE then
                                         if current_form == STAGE_FORM_TYPE_NORMAL or current_form == STAGE_FORM_TYPE_BATTLE then
-                                            local44 = true
+                                            is_invalid_stage_2 = true
                                         end
                                     elseif other_form == STAGE_FORM_TYPE_END and current_form == STAGE_FORM_TYPE_END then
-                                        local44 = true
+                                        is_invalid_stage_2 = true
                                     end
                                 end
                                 if UiScriptPlayer.invoke("is_battle_field_ls_stage_preview", current_preview_index) == true then
                                     if other_form == STAGE_FORM_TYPE_BATTLE and current_form == STAGE_FORM_TYPE_BATTLE then
-                                        local44 = true
+                                        is_invalid_stage_2 = true
                                     elseif other_form == STAGE_FORM_TYPE_END and current_form == STAGE_FORM_TYPE_END then
-                                        local44 = true
+                                        is_invalid_stage_2 = true
                                     end
                                 end
                             end
@@ -2110,9 +2110,9 @@ local local139 = function()
                 if check_for_cancel() == true then
                     break
                 end
-                if local117(false, true) == false then
+                if un_decide(false, true) == false then
                     if virtual_input:is_pressed(INPUT_NEXT_SCENE) == true then
-                        local unk0 = true
+                        local is_valid_stage = true
                         if tab_index == TAB_SWITCH_SUB then
                             if IS_ONLINE == true and UiScriptPlayer.invoke("is_enable_made_stage_sub_list") == false then
                                 local db = UiScriptPlayer.invoke("get_disable_made_stage_popup_id_sub_list")
@@ -2120,40 +2120,40 @@ local local139 = function()
                                 repeat
                                     coroutine.yield()
                                 until AppPopupManager.is_busy() == false
-                                unk0 = false
+                                is_valid_stage = false
                             end
-                            if unk0 == true and UiScriptPlayer.invoke("is_all_panel_exceeded_num_player_sub_list") == true then
+                            if is_valid_stage == true and UiScriptPlayer.invoke("is_all_panel_exceeded_num_player_sub_list") == true then
                                 AppPopupManager.open_database("ID_POPUP_STAGE_SELECT_STGCREATE_NO_STAGE")
                                 repeat
                                     coroutine.yield()
                                 until AppPopupManager.is_busy() == false
-                                unk0 = false
+                                is_valid_stage = false
                             end
                         end
-                        if unk0 == true and local116() == true then
+                        if is_valid_stage == true and prepare_scene_exit() == true then
                             UiSoundManager.play_se_label("se_system_fixed_s")
                             local off_preview_index = -1
                             if check_all_previews_enabled() == false then
-                                play_off_preview_animation(preview_selected_index)
-                                off_preview_index = preview_selected_index
+                                play_off_preview_animation(current_selected_preview)
+                                off_preview_index = current_selected_preview
                             end
                             if tab_index == TAB_SWITCH_SUB then
                                 UiScriptPlayer.invoke("set_stage_preview_empty_exit_sub", off_preview_index)
                             else
-                                local form = stage_previews[preview_selected_index + 1].form_type_
+                                local form = stage_previews[current_selected_preview + 1].form_type_
                                 UiScriptPlayer.invoke("set_stage_preview_empty_exit", off_preview_index, form)
                             end
                         end
                     elseif virtual_input:is_decide() == true then
-                        local129()
+                        handle_panel_decide()
                     elseif virtual_input:is_pressed(INPUT_BGM_SELECT) == true then
-                        local index = preview_selected_index
-                        if local39 ~= UI_INVALID_INDEX then
-                            index = local39
+                        local index = current_selected_preview
+                        if highlighed_preview ~= UI_INVALID_INDEX then
+                            index = highlighed_preview
                         end
                         open_bgm_select(index, false)
                     else
-                        local136()
+                        update_both_tabs()
                     end
                 end
             else
@@ -2177,7 +2177,7 @@ local local139 = function()
 end
 
 -- CLOSURE_81, R140
-local local140 = function()
+local my_music_main_update = function()
     set_scene_enable(true)
     repeat
         local x = UiScriptPlayer.invoke("get_hand_position_x")
@@ -2193,22 +2193,22 @@ local local140 = function()
             if virtual_input:is_cancel() == true then
                 back_button_selector:decide_button(BUTTON_BACK)
             elseif virtual_input:is_decide() == true then
-                if 0 <= current_selected_panel and UiScriptPlayer.invoke("is_empty_stage_preview", preview_selected_index) == false then
+                if 0 <= current_selected_panel and UiScriptPlayer.invoke("is_empty_stage_preview", current_selected_preview) == false then
                     stage_select_bgm:activate(0, true, false)
                     show_scene_and_hand(false, false)
                 end
             else
-                local131()
+                normal_tab_main_update()
                 update_panel_scalings()
-                local unk4 = false
+                local should_be_operatable = false
                 if current_selected_panel ~= UI_INVALID_INDEX then
                     if UiScriptPlayer.invoke("is_lock_stage_panel", current_selected_panel) == false then
-                        unk4 = true
+                        should_be_operatable = true
                     end
                 elseif 0 <= back_button.selected_button_id_ then
-                    unk4 = true
+                    should_be_operatable = true
                 end
-                UiScriptPlayer.invoke("set_hand_operatable", unk4)
+                UiScriptPlayer.invoke("set_hand_operatable", should_be_operatable)
             end
         else
             show_scene_and_hand(true, false)
@@ -2244,9 +2244,9 @@ main = function()
     until root_view:is_animation_finished("in")
     virtual_input:set_enable(true)
     if IS_MY_MUSIC == true then
-        local140()
+        my_music_main_update()
     else
-        local139()
+        regular_main_update()
     end
 
     stop_long_cancel_se()
