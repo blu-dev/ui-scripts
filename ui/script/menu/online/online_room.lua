@@ -59,12 +59,10 @@ function online_room:initialize ()
     exit_code = SCENE_EXIT_CODE_NONE
     -- Set the layout root to online_buddy
     self.layout_root = LayoutRootList.online_buddy
-    -- This is so weird and i dont like it
-    -- but this is how the smash devs do it
-    -- trying to do it any other way results in the binary not being 1 to 1
-    self.layout_view = layout_root.get_root_view()
-    -- Set the virtual input to the virtual input
-    self.virtual_input = self.get_virtual_input(self.layout_root)
+    -- Set the layout view by getting the root view from layout_root
+    self.layout_view = self.layout_root:get_root_view()
+    -- Set the virtual input by getting the virtual input from layout_root
+    self.virtual_input = self.layout_root:get_virtual_input()
     -- Show the online bg
     ComBgActor:show_bg(COMBG_KIND_ONLINE)
     -- Hide the frame
