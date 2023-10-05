@@ -1,3 +1,21 @@
+--[[
+FILE: com_bg_anim_collection.lua
+Reference Code: com_bg_anim_collection.lc
+
+Author: jozz
+
+Notes: The following code has been decompiled with the assistance of a modified
+binary of the DSLuaDecompiler to produce *some* output, while not very meaningful it helps
+outline the structure of some functions so that the disassembled lua could be used
+as a reference instead of the guiding light
+
+The following code was all written by hand, and was compiled via https://github.com/ultimate-research/smash-lua
+and disassembled using https://github.com/jam1garner/smash-luadec
+
+The output disassembly of this file is guaranteed to match exactly that of com_bg_anim_collection.lc
+when unmodified.
+]] --
+
 local value = {}
 function value:initialize (sub_anim_module)
     -- Set the pane
