@@ -47,7 +47,7 @@ function value:initialize (sub_anim_module)
         end
         -- If index is more than or equal to 5, and if index is less than 10
         if 5 <= index and index < 10 then
-            -- Set sz
+            -- Set sx
             group_pane.property.sx = 0xFFFFFFFFFFFFF9C0 + module_ui_common.get_random() * 120
             -- Set sy
             group_pane.property.sy = 2300 + module_ui_common.get_random() * 120
