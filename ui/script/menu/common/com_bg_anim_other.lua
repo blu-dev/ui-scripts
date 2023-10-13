@@ -24,20 +24,20 @@ function value:initialize (sub_anim_module)
         -- Set the property
         group_pane.property =
         {
-            max_scale = module_ui_common.get_random() * 1.83 + 0.48,
-            speed_sc = module_ui_common.get_random() * 0.0363 + 0.013,
+            max_scale = module_ui_common.get_random() * 1.8300000429153442 + 0.47999998927116394,
+            speed_sc = module_ui_common.get_random() * 0.03629999980330467 + 0.013000000268220901,
             dir_scale = 1,
             max_alpha = module_ui_common.get_random() * 30 + 50,
             anim_end = 0
         }
-        if module_ui_common.get_random() <= 0.3 then
+        if module_ui_common.get_random() <= 0.30000001192092896 then
             group_pane.property.dir_scale = 0xFFFFFFFFFFFFFFFF
         end
     end
     for index, group_pane in ipairs(self.panes) do
         -- Make scale variables
         -- Side note, I do not know why they didn't use 2 separate variables
-        local scale_x = module_ui_common.get_random() * 1.83 + 0.48
+        local scale_x = module_ui_common.get_random() * 1.8300000429153442 + 0.47999998927116394
         local scale_y = scale_x
         -- Set the scale variables
         group_pane.pane:set_scale(scale_x, scale_y)
@@ -108,27 +108,27 @@ function value:update ()
                 -- Y + (max scale * dir scale - Y) * speed
                 scale_y = scale_y + (max_scale * dir_scale - scale_y) * speed
                 -- Set alpha using the lerp formula
-                alpha = alpha + (0 - alpha) * 0.001
+                alpha = alpha + (0 - alpha) * 0.0010000000474974513
                 -- If alpha is less than .01
-                if alpha < 0.1 then
+                if alpha < 0.10000000149011612  then
                     -- Set anim end to 1
                     group_pane.property.anim_end = 1
                 end
             else
                 -- Set the x scale to
                 -- X + (max scale * dir scale - X) * speed
-                scale_x = scale_x + (max_scale * dir_scale - scale_x) * speed * 0.22
+                scale_x = scale_x + (max_scale * dir_scale - scale_x) * speed * 0.2199999988079071
                 -- Set the Y scale to
                 -- Y + (max scale * dir scale - Y) * speed
-                scale_y = scale_y + (max_scale * dir_scale - scale_y) * speed * 0.22
+                scale_y = scale_y + (max_scale * dir_scale - scale_y) * speed * 0.2199999988079071
                 if scale_x < max_scale * 0.5 then
                     -- Once again use the lerp formula to set alpha
-                    alpha = alpha + (0 - alpha) * 0.0007
+                    alpha = alpha + (0 - alpha) * 0.000699999975040555
                 else
                     -- lerp
-                    alpha = alpha + (group_pane.property.max_alpha - alpha) * 0.04
+                    alpha = alpha + (group_pane.property.max_alpha - alpha) * 0.03999999910593033
                 end
-                if scale_x < 0.02 then
+                if scale_x < 0.019999999552965164 then
                     -- Set scale
                     scale_x = 0
                     scale_y = 0
